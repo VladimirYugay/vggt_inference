@@ -182,13 +182,12 @@ if __name__ == '__main__':
     results = {}
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
 
-    for scene in scannet_scenes[:2]:
+    for scene in scannet_scenes:
         print("Processing", scene)
         scene_dir = args.data_dir / f"{scene}"
         output_scene_dir = args.output_path / scene
-        output_scene_dir.mkdir(parents=True, exist_ok=True)  # Create scene-specific folder
 
-        if (output_scene_dir / "stats.json").exists():
+        if (output_scene_dir / "metrics.json").exists():
             continue
 
         pose_path = scene_dir / "poses.npz"
@@ -206,7 +205,7 @@ if __name__ == '__main__':
 
         all_cam_to_world_mat = []
         stride = 3
-        intervals = generate_tail_overlapping_intervals(c2ws.shape[0], 24, stride)  # take batches of 10 images to fit into GPU
+        intervals = generate_tail_overlapping_intervals(c2ws.shape[0], 30, stride)  # take batches of 10 images to fit into GPU
         for frame_ids in intervals:
             images = video_reader.get_batch(frame_ids).asnumpy()  # (N, H, W, 3) [0, 255]
             vgg_input_images = get_vgg_input_imgs(images).cuda()
@@ -226,6 +225,11 @@ if __name__ == '__main__':
         traj_est_poses = np.array(all_cam_to_world_mat)
         n = traj_est_poses.shape[0]
 
+        if n < 3:
+            print("Skipping", scene)
+            continue
+
+        output_scene_dir.mkdir(parents=True, exist_ok=True)  # Create scene-specific folder
         frame_ids = sorted(set([idx for interval in intervals for idx in interval]))
         w2cs = np.linalg.inv(c2ws[frame_ids])[:n]
 
